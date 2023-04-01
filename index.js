@@ -39,6 +39,20 @@ let transporter = nodemailer.createTransport({
 // jsonwebtoken
 const jwt = require("jsonwebtoken");
 
+// faker
+const { faker } = require('@faker-js/faker');
+
+// random string
+function generateRandomString(length) {
+  let text = '';
+  const characters ='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const charactersLength = characters.length;
+  for ( let i = 0; i < length; i++ ) {
+    text += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return text;
+}
+
 // get user data, no mater what table he is in
 async function getUserDataByEmail(email) {
   let user;
@@ -51,7 +65,7 @@ async function getUserDataByEmail(email) {
     return user;
   }
 
-  [ rows, fields ] = await connection.query("SELECT * FROM old_employees WHERE email = ?", [email]);
+  [ rows, fields ] = await connection.query("SELECT * FROM employees WHERE email = ?", [email]);
   user = rows[0];
 
   if(user){
@@ -59,7 +73,7 @@ async function getUserDataByEmail(email) {
     return user;
   }
 
-  [ rows, fields ] = await connection.query("SELECT * FROM new_employees WHERE email = ?", [email]);
+  [ rows, fields ] = await connection.query("SELECT * FROM employees WHERE email = ?", [email]);
   user = rows[0];
 
   if(user){
@@ -133,6 +147,11 @@ async function checkUser(req, res, next) {
 
 // login route
 app.post('/api/login', async (req, res) => {
+  if(!(req.body.email && req.body.password)){
+    res.sendStatus(400);
+    return;
+  }
+
   const email = req.body.email;
   const password = req.body.password;
   
@@ -180,12 +199,123 @@ app.post('/api/login', async (req, res) => {
   res.sendStatus(200);
 })
 
+app.post('api/resetPassword', async (req, res) => {
+  if(!(req.body.email && req.body.oldPassword && req.body.newPassword)){
+    res.sendStatus(400);
+    return;
+  }
+
+  const email = req.body.email;
+  const oldPassword = req.body.oldPassword;
+  const newPassword = req.body.newPassword;
+
+  //check email exists
+  const user = await getUserDataByEmail(email);
+  if(!user){
+    res.sendStatus(403);
+    return;
+  }
+
+  //check password correct
+  const passwordCorrect = await bcrypt.compare(oldPassword, user.password);
+  if(!passwordCorrect){
+    res.sendStatus(403);
+    return;
+  }
+
+  //generate new password
+  const hashedPass = await bcrypt.hash(newPassword, 10);
+
+  try {
+    await connection.query("UPDATE employees SET password = ? WHERE email = ?", [newPassword, email])
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+    return;
+  }
+
+  res.sendStatus(200);
+  return;
+})
+
+app.post('/api/utils/generateFakeUsers', async (req, res) => {
+  const count = req.body.count || 5;
+
+  for(let x=0; x<count; x++){
+    const first_name = faker.name.firstName();
+    const last_name = faker.name.lastName();
+    const email = "fake-" + faker.internet.email(first_name, last_name);
+    const password = await bcrypt.hash(generateRandomString(5), 5);
+    const hire_date = faker.datatype.datetime().toISOString().slice(0, 19).replace('T', ' ');
+    const industry = Math.floor(Math.random()*4.99);
+    const frontend_or_backend = Math.floor(Math.random()*2.99);
+    const tech_stack = faker.helpers.arrayElements(["react", "angular", "vue", "solid", "svelte", "node", "express", "socket.io", "django", "ruby on rails", "asp.net", "actix", "rocket.rs"]).join(',');
+    const language_familiarity = faker.helpers.shuffle(["1","1","1","1","2","2","2","2","3","3"]).join('');
+    const tools_familiarity = faker.helpers.shuffle(["1","1","1","1","2","2","2","2","3","3"]).join(''); 
+    const communication_style = Math.floor(Math.random()*9.99);
+    const conflict_style = Math.floor(Math.random()*4.99);
+    const communication_skills = String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9));
+    const teamwork_skills = String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9));
+
+    console.log("Adding fake user " + first_name + " " + last_name);
+
+    try {
+      await connection.query("INSERT INTO employees(email, password, first_name, last_name, manager, hire_date, industry, front_or_backend, tech_stack, language_familiarity, tools_familiarity, communication_style, conflict_style, communication_skills, teamwork_skills, profile_picture) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+        email,
+        password,
+        first_name,
+        last_name,
+        1,
+        hire_date,
+        industry,
+        frontend_or_backend,
+        tech_stack,
+        language_familiarity,
+        tools_familiarity,
+        communication_style,
+        conflict_style,
+        communication_skills,
+        teamwork_skills,
+        "none"
+      ])
+    } catch (err) {
+      console.log(err);
+      break;
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+app.post('/api/utils/removeFakeUsers', async (req, res) => {
+  try{
+    await connection.query("DELETE FROM employees WHERE email LIKE 'fake%'");
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+    return;
+  }
+  res.sendStatus(200);
+  return;
+})
+
 app.post('/api/register', checkUser,  async (req,res) => {
+  if(!(req.body.email && req.body.first_name && req.body.last_name && req.body.hire_date)) {
+    res.sendStatus(400);
+    return;
+  }
+
+  if(req.user.role != "manager"){
+    res.sendStatus(403);
+    return;
+
+  }
+
   const email = req.body.email;
   const first_name = req.body.first_name;
   const last_name = req.body.last_name;
-  const manager = 0;
-  const hire_date = new Date().toISOString();
+  const manager = req.user.id;
+  const hire_date = req.body.hire_date;
 
   const user = await getUserDataByEmail(email);
 
@@ -194,17 +324,12 @@ app.post('/api/register', checkUser,  async (req,res) => {
     return;
   }
 
-  let password = '';
-  const characters ='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const charactersLength = characters.length;
-  for ( let i = 0; i < 10; i++ ) {
-    password += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
+  let password = generateRandomString(10);
 
   const hashedPass = await bcrypt.hash(password, 10);
 
   try{
-    await connection.query("INSERT INTO new_employees(email, password, first_name, last_name, manager, hire_date) VALUES(?, ?, ?, ?, ?, ?);", [ email, hashedPass, first_name, last_name, manager, hire_date]);
+    await connection.query("INSERT INTO employees(email, password, first_name, last_name, manager, hire_date) VALUES(?, ?, ?, ?, ?, ?);", [ email, hashedPass, first_name, last_name, manager, hire_date]);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
