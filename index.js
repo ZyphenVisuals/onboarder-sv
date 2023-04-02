@@ -292,6 +292,7 @@ app.post('/api/utils/generateFakeUsers', async (req, res) => {
     const conflict_style = Math.floor(Math.random()*4.99);
     const communication_skills = String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9));
     const teamwork_skills = String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9)) + String(Math.floor((Math.random()+1)*2.9));
+    const manager = Math.floor(Math.random()*2.5)+1;
 
     console.log("Adding fake user " + first_name + " " + last_name);
 
@@ -301,7 +302,7 @@ app.post('/api/utils/generateFakeUsers', async (req, res) => {
         password,
         first_name,
         last_name,
-        1,
+        manager,
         hire_date,
         industry,
         frontend_or_backend,
@@ -406,6 +407,81 @@ app.get('/api/getUserData', checkUser, async (req, res) => {
   userData.role = req.user.role;
   userData = stripUserData(userData, 1);
   res.status(200).send(userData);
+})
+
+app.post('/api/updateUserData', checkUser, async (req, res) => {
+  if(req.body.email == undefined || 
+  req.body.first_name == undefined || 
+  req.body.last_name == undefined || 
+  req.body.industry == undefined || 
+  req.body.front_or_backend == undefined || 
+  req.body.tech_stack == undefined || 
+  req.body.language_familiarity == undefined || 
+  req.body.tools_familiarity == undefined ||
+  req.body.communication_style == undefined ||
+  req.body.conflict_style == undefined ||
+  req.body.communication_skills == undefined ||
+  req.body.teamwork_skills == undefined ||
+  req.body.profile_picture == undefined ||
+  req.user.role == "manager"){
+    res.sendStatus(400);
+    return;
+  }
+
+  try{
+    await connection.query("UPDATE employees SET email = ?, first_name = ?, last_name = ?, industry = ?, front_or_backend = ?, tech_stack = ?, language_familiarity = ?, tools_familiarity = ?, communication_style = ?, conflict_style = ?, communication_skills = ?, teamwork_skills = ?, profile_picture = ? WHERE id = ?", [
+      req.body.email,
+      req.body.first_name,
+      req.body.last_name,
+      req.body.industry,
+      req.body.front_or_backend,
+      req.body.tech_stack,
+      req.body.language_familiarity,
+      req.body.tools_familiarity,
+      req.body.communication_style,
+      req.body.conflict_style,
+      req.body.communication_skills,
+      req.body.teamwork_skills,
+      req.body.profile_picture,
+      req.user.id
+    ])
+    res.sendStatus(200);
+    return;
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+    return;
+  }
+})
+
+app.get('/api/getEmployeesData/:page', checkUser, async (req, res) => {
+  if(req.user.role != "manager") {
+    res.sendStatus(403);
+    return;
+  }
+
+  if(req.params.page < 1) {
+    res.sendStatus(400);
+    return;
+  }
+
+  let employeesData;
+
+  try {
+    [ rows, fields ]  = await connection.query("SELECT * FROM employees WHERE manager = ? ORDER BY id LIMIT ?, 30", [req.user.id, (req.params.page-1)*10 ])
+    employeesData = rows;
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+    return;
+  }
+
+  employeesData.forEach(employee => {
+    employee = stripUserData(employee, 0);
+  });
+
+  res.status(200).send(employeesData);
+  return;
 })
 
 app.listen(process.env.PORT, ()=> {
