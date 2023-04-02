@@ -53,6 +53,18 @@ function generateRandomString(length) {
   return text;
 }
 
+function stripUserData(userData, level) {
+  delete userData.password;
+  if(level >=1){
+    delete userData.id;
+    delete userData.password_change_required;
+  }
+  if(level >=2){
+    delete userData.email;
+  }
+  return userData;
+}
+
 // get user data, no mater what table he is in
 async function getUserDataByEmail(email) {
   let user;
@@ -69,17 +81,41 @@ async function getUserDataByEmail(email) {
   user = rows[0];
 
   if(user){
-    user.role="old";
+    [ rows, fields ] = await connection.query("SELECT TIMESTAMPDIFF(YEAR, now(), ?) AS age", [user.hire_date])
+    if(rows[0].age > -1) {
+      user.role="new";
+    }
+    else{
+      user.role="old";
+    }
     return user;
   }
 
-  [ rows, fields ] = await connection.query("SELECT * FROM employees WHERE email = ?", [email]);
-  user = rows[0];
-
-  if(user){
-    user.role="new";
-  }
   return user;
+}
+
+async function getUserDataByID(id, role) {
+
+  if(role=="manager"){
+    try {
+      [ rows, fields ] = await connection.query("SELECT * FROM managers WHERE id = ?", [id]);
+      if(!rows) return "";
+      return rows[0];
+    }
+    catch (err) {
+      console.log(err);
+      return "";
+    }
+  }
+
+  try {
+    [ rows, fields ] = await connection.query("SELECT * FROM employees WHERE id = ?", [id]);
+    if(!rows) return "";
+    return rows[0];
+  } catch (err) {
+    console.log(err);
+    return "";
+  }
 }
 
 async function generateToken(refreshToken) {
@@ -199,7 +235,7 @@ app.post('/api/login', async (req, res) => {
   res.sendStatus(200);
 })
 
-app.post('api/resetPassword', async (req, res) => {
+app.post('/api/resetPassword', async (req, res) => {
   if(!(req.body.email && req.body.oldPassword && req.body.newPassword)){
     res.sendStatus(400);
     return;
@@ -227,7 +263,7 @@ app.post('api/resetPassword', async (req, res) => {
   const hashedPass = await bcrypt.hash(newPassword, 10);
 
   try {
-    await connection.query("UPDATE employees SET password = ? WHERE email = ?", [newPassword, email])
+    await connection.query("UPDATE employees SET password = ?, password_change_required = 0 WHERE email = ?", [hashedPass, email])
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
@@ -360,6 +396,17 @@ app.post('/api/register', checkUser,  async (req,res) => {
     res.sendStatus(200);
   });
 });
+
+app.get('/api/getUserData', checkUser, async (req, res) => {
+  let userData = await getUserDataByID(req.user.id, req.user.role);
+  if(userData == ""){
+    res.sendStatus(500);
+    return;
+  }
+  userData.role = req.user.role;
+  userData = stripUserData(userData, 1);
+  res.status(200).send(userData);
+})
 
 app.listen(process.env.PORT, ()=> {
   console.log("Server started on " + process.env.PORT)
