@@ -65,6 +65,10 @@ function stripUserData(userData, level) {
   return userData;
 }
 
+function sqlDate(date) {
+  return new Date(date).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // get user data, no mater what table he is in
 async function getUserDataByEmail(email) {
   let user;
@@ -352,7 +356,7 @@ app.post('/api/register', checkUser,  async (req,res) => {
   const first_name = req.body.first_name;
   const last_name = req.body.last_name;
   const manager = req.user.id;
-  const hire_date = req.body.hire_date;
+  const hire_date = sqlDate(req.body.hire_date);
 
   const user = await getUserDataByEmail(email);
 
@@ -482,6 +486,59 @@ app.get('/api/getEmployeesData/:page', checkUser, async (req, res) => {
 
   res.status(200).send(employeesData);
   return;
+})
+
+app.post('/api/updateEmployeeData', checkUser, async (req, res) => {
+  if(req.body.email == undefined || 
+  req.body.id == undefined ||
+  req.body.password_change_required == undefined ||
+  req.body.buddy === undefined ||
+  req.body.hire_date == undefined ||
+  req.body.first_name == undefined || 
+  req.body.last_name == undefined || 
+  req.body.industry == undefined || 
+  req.body.front_or_backend == undefined || 
+  req.body.tech_stack == undefined || 
+  req.body.language_familiarity == undefined || 
+  req.body.tools_familiarity == undefined ||
+  req.body.communication_style == undefined ||
+  req.body.conflict_style == undefined ||
+  req.body.communication_skills == undefined ||
+  req.body.teamwork_skills == undefined ||
+  req.body.profile_picture == undefined ||
+  req.user.role != "manager"){
+    res.sendStatus(400);
+    return;
+  }
+
+
+  try{
+    await connection.query("UPDATE employees SET email = ?, first_name = ?, last_name = ?, industry = ?, front_or_backend = ?, tech_stack = ?, language_familiarity = ?, tools_familiarity = ?, communication_style = ?, conflict_style = ?, communication_skills = ?, teamwork_skills = ?, profile_picture = ?, password_change_required = ?, buddy = ?, hire_date = ? WHERE id = ?", [
+      req.body.email,
+      req.body.first_name,
+      req.body.last_name,
+      req.body.industry,
+      req.body.front_or_backend,
+      req.body.tech_stack,
+      req.body.language_familiarity,
+      req.body.tools_familiarity,
+      req.body.communication_style,
+      req.body.conflict_style,
+      req.body.communication_skills,
+      req.body.teamwork_skills,
+      req.body.profile_picture,
+      req.body.password_change_required,
+      req.body.buddy,
+      sqlDate(req.body.hire_date),
+      req.body.id
+    ])
+    res.sendStatus(200);
+    return;
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+    return;
+  }
 })
 
 app.listen(process.env.PORT, ()=> {
