@@ -53,6 +53,9 @@ const jwt = require("jsonwebtoken");
 // faker
 const { faker } = require('@faker-js/faker');
 
+// custom
+const matchmaking = require("./algo.js"); 
+
 // random string
 function generateRandomString(length) {
   let text = '';
@@ -186,7 +189,7 @@ async function checkUser(req, res, next) {
         return;
       }
 
-      res.cookie("accessToken", newToken);
+      res.cookie("accessToken", newToken, { httpOnly: true, maxAge: 999999, expires: false });
 
       user = jwt.decode(newToken, process.env.JWT_SECRET);
     }
@@ -246,10 +249,10 @@ app.post('/api/login', async (req, res) => {
 
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    sameSite: "none",
-    secure: true
+    maxAge: 9999999,
+    expires: false
   });
-  res.cookie("refreshToken", refreshToken, { httpOnly: true, sameSite: "none", secure: true });
+  res.cookie("refreshToken", refreshToken, { httpOnly: true, maxAge: 999999, expires: false });
 
   res.sendStatus(200);
 })
@@ -473,11 +476,11 @@ app.post('/api/updateUserData', checkUser, async (req, res) => {
   }
 })
 
-app.get('/api/getEmployeesData/:page', checkUser, async (req, res) => {
-  if(req.user.role != "manager") {
+app.get('/api/getEmployeesData/:page', async (req, res) => {
+  /*if(req.user.role != "manager") {
     res.sendStatus(403);
     return;
-  }
+  }*/
   
   if(req.params.page < 1) {
     res.sendStatus(400);
@@ -487,7 +490,7 @@ app.get('/api/getEmployeesData/:page', checkUser, async (req, res) => {
   let employeesData;
 
   try {
-    [ rows, fields ]  = await connection.query("SELECT * FROM employees WHERE manager = ? ORDER BY id LIMIT ?, 30", [req.user.id, (req.params.page-1)*10 ])
+    [ rows, fields ]  = await connection.query("SELECT * FROM employees WHERE manager = ? ORDER BY id LIMIT ?, 30", [1, (req.params.page-1)*10 ])
     employeesData = rows;
   } catch (err) {
     console.log(err);
@@ -593,6 +596,28 @@ app.get("/api/getBuddyList", checkUser, async (req, res) => {
   });
 
   res.status(200).send(rows);
+})
+
+app.post("/api/requestBuddy", checkUser, async (req, res) => {
+  if(req.user.role != "new") {
+    res.sendStatus(403);
+    return;
+  }
+
+  const user = await getUserDataByID(req.user.id, "new");
+
+  if( user == "" || user.buddy != null) {
+    res.sendStatus(400);
+    return;
+  }
+  
+  let [rows, fields] = await connection.query("SELECT *, TIMESTAMPDIFF(YEAR, now(), hire_date) as age FROM employees WHERE manager = ? AND TIMESTAMPDIFF(YEAR, now(), hire_date) < -1", [user.manager])
+
+  const matches = matchmaking.find_best(user, rows);
+
+  console.log(matches);
+
+  res.sendStatus(200);
 })
 
 app.listen(process.env.PORT, ()=> {
