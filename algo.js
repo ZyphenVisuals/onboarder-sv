@@ -1,7 +1,7 @@
 module.exports= {
   find_best: (new_employee, potential_matches) => {
     new_employee.age = new_employee.age * -1;
-    console.log(potential_matches.length)
+    console.log(potential_matches.length);
     score = [];
     for(i = 0; i < potential_matches.length; i++)
         score[i] = 0;
@@ -11,66 +11,51 @@ module.exports= {
 
     w = "";
     NewEmp_techStack = new Set();
-    for(i = 0; i < new_employee.tech_stack.length; i++)
-    {
-        if(new_employee.tech_stack[i] == ' ')
-        {
-            NewEmp_techStack.add(w);
-            w = "";
-        }
-        else w += new_employee.tech_stack[i];
-    }
-    NewEmp_techStack.add(w);
+    new_employee.tech_stack.split(',').forEach(element => {
+     NewEmp_techStack.add(element); 
+    });
 
     for(i = 0; i < potential_matches.length; i++)
     {
         //score[i] = 0 - 1000 * Math.max(0, potential_matches[i].buddy_num - 2);
         
-      if(potential_matches[0].id == null ||
-      potential_matches[0].age == null ||
-      potential_matches[0].industry == null ||
-      potential_matches[0].front_or_backend == null ||
-      potential_matches[0].tech_stack == null ||
-      potential_matches[0].language_familiarity == null ||
-      potential_matches[0].tools_familiarity == null ||
-      potential_matches[0].communication_stlye == null ||
-      potential_matches[0].conflict_style == null ||
-      potential_matches[0].communication_skills == null ||
-      potential_matches[0].teamwork_skills == null
+      /*if(potential_matches[i].id == null ||
+      potential_matches[i].age == null ||
+      potential_matches[i].industry == null ||
+      potential_matches[i].front_or_backend == null ||
+      potential_matches[i].tech_stack == null ||
+      potential_matches[i].language_familiarity == null ||
+      potential_matches[i].tools_familiarity == null ||
+      potential_matches[i].communication_stlye == null ||
+      potential_matches[i].conflict_style == null ||
+      potential_matches[i].communication_skills == null ||
+      potential_matches[i].teamwork_skills == null
       ){
         score[i] = -99999;
         continue;
-      }
+      }*/
 
         potential_matches[i].age = potential_matches[i].age * -1;  
-
-        score[i] += 10 * (potential_matches[i].age - 2 * new_employee.age);
+        score[i] += 10 * (potential_matches[i].age);
 
         score[i] += 100 * (new_employee.industry === potential_matches[i].industry);
 
         score[i] -= 1000 * Math.abs(new_employee.front_or_backend - potential_matches[i].front_or_backend);
 
-        w = "";
-        for(j = 0; j < potential_matches[i].tech_stack.length; j++)
-        {
-            if(potential_matches[i].tech_stack[j] == ' ')
-            {
-                if(NewEmp_techStack.has(w))
-                    score[i] += 1000;
-                w = "";
-            }
-            else w += potential_matches[i].tech_stack[j];
-        }
-        if(NewEmp_techStack.has(w))
-            score[i] += 100;
+        potential_matches[i].tech_stack.split(',').forEach(element => {
+         if(NewEmp_techStack.has(element)) {
+           score[i] += 1000;
+        } 
+        });
+      
 
         for(j = 0; j < 10; j++)
-            score += 100 * Math.max(0, Number(potential_matches[i].language_familiarity[j]) - Number(new_employee.language_familiarity[j]));
+            score[i] += 100 * Math.max(0, Number(potential_matches[i].language_familiarity[j]) - Number(new_employee.language_familiarity[j]));
 
         for(j = 0; j < 10; j++)
-            score += 100 * Math.max(0, Number(potential_matches[i].tools_familiarity[j]) - Number(new_employee.tools_familiarity[j]));
+            score[i] += 100 * Math.max(0, Number(potential_matches[i].tools_familiarity[j]) - Number(new_employee.tools_familiarity[j]));
 
-        score[i] += 10 * comm_score[potential_matches[i].communication_stlye];
+        score[i] += 10 * comm_score[potential_matches[i].communication_style];
 
         score[i] += 10 * conf_score[potential_matches[i].conflict_style];
 
@@ -80,9 +65,7 @@ module.exports= {
         for(j = 0; j < 3; j++)
             score[i] += 100 * Math.max(0, Number(potential_matches[i].teamwork_skills[j]) - Number(new_employee.teamwork_skills[j]));
 
-        console.log("final score", i, score[i]);
     }
-
     matches = new Set();
     max_score = -2000000000;
 
@@ -99,6 +82,14 @@ module.exports= {
         }
     }
 
-    return Array.from(matches).length;
+    let scoreS = "";
+
+    score.forEach(el => {
+      scoreS += String(el) + " "; 
+    })
+
+    console.log(scoreS)
+
+    return Array.from(matches);
   }
 }

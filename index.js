@@ -189,7 +189,7 @@ async function checkUser(req, res, next) {
         return;
       }
 
-      res.cookie("accessToken", newToken, { httpOnly: true, maxAge: 999999, expires: false });
+      res.cookie("accessToken", newToken, { httpOnly: true,  expires: false });
 
       user = jwt.decode(newToken, process.env.JWT_SECRET);
     }
@@ -249,10 +249,9 @@ app.post('/api/login', async (req, res) => {
 
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    maxAge: 9999999,
     expires: false
   });
-  res.cookie("refreshToken", refreshToken, { httpOnly: true, maxAge: 999999, expires: false });
+  res.cookie("refreshToken", refreshToken, { httpOnly: true,expires: false });
 
   res.sendStatus(200);
 })
@@ -617,7 +616,9 @@ app.post("/api/requestBuddy", checkUser, async (req, res) => {
 
   console.log(matches);
 
-  res.sendStatus(200);
+  await connection.query("UPDATE employees SET buddy = ? WHERE id = ?", [matches[0], req.user.id]);
+
+  res.status(200).send({ buddy: matches[0]});
 })
 
 app.listen(process.env.PORT, ()=> {
