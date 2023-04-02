@@ -4,6 +4,17 @@ const app = express();
 app.use(express.json());
 app.use(require('cookie-parser')());
 
+//cors
+const cors = require('cors');
+app.use(cors(
+  {
+    origin: (origin, callback) => {
+      callback(null, origin);
+    },
+    credentials: true
+  }
+));
+
 // dotenv
 require('dotenv').config();
 
@@ -103,7 +114,7 @@ async function getUserDataByID(id, role) {
   if(role=="manager"){
     try {
       [ rows, fields ] = await connection.query("SELECT * FROM managers WHERE id = ?", [id]);
-      if(!rows) return "";
+      if(rows.length === 0) return "";
       return rows[0];
     }
     catch (err) {
@@ -114,7 +125,7 @@ async function getUserDataByID(id, role) {
 
   try {
     [ rows, fields ] = await connection.query("SELECT * FROM employees WHERE id = ?", [id]);
-    if(!rows) return "";
+    if(rows.length === 0) return "";
     return rows[0];
   } catch (err) {
     console.log(err);
@@ -233,8 +244,12 @@ app.post('/api/login', async (req, res) => {
     expiresIn: process.env.JWT_REFRESH_EXPIRATION,
   })
 
-  res.cookie("accessToken", accessToken, { httpOnly: true });
-  res.cookie("refreshToken", refreshToken, { httpOnly: true });
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    sameSite: "none",
+    secure: true
+  });
+  res.cookie("refreshToken", refreshToken, { httpOnly: true, sameSite: "none", secure: true });
 
   res.sendStatus(200);
 })
@@ -463,7 +478,7 @@ app.get('/api/getEmployeesData/:page', checkUser, async (req, res) => {
     res.sendStatus(403);
     return;
   }
-
+  
   if(req.params.page < 1) {
     res.sendStatus(400);
     return;
@@ -539,6 +554,45 @@ app.post('/api/updateEmployeeData', checkUser, async (req, res) => {
     res.sendStatus(500);
     return;
   }
+})
+
+app.get('/api/getBuddy', checkUser, async (req, res) => {
+  const user = await getUserDataByID(req.user.id, "new");
+  
+  if(req.user.role != "new" || user == ""){
+    res.sendStatus(400);
+    return;
+  }
+
+  if(user.buddy == null) {
+    res.status(200).send(null);
+    return;
+  }
+  let buddy = await getUserDataByID(user.buddy, "old");
+
+  if(buddy == ""){
+    res.status(200).send(null);
+    return;
+  }
+
+  buddy = stripUserData(buddy, 2);
+  res.status(200).send(buddy);
+  return;
+})
+
+app.get("/api/getBuddyList", checkUser, async (req, res) => {
+  if(req.user.role != "old") {
+    res.sendStatus(400);
+    return;
+  } 
+
+  [rows, fields] = await connection.query("SELECT * FROM employees WHERE buddy = ?", [req.user.id]);
+
+  rows.forEach(employee => {
+    employee = stripUserData(employee, 2);
+  });
+
+  res.status(200).send(rows);
 })
 
 app.listen(process.env.PORT, ()=> {
